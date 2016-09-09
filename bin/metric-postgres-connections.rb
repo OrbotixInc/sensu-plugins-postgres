@@ -91,29 +91,34 @@ class PostgresStatsDBMetrics < Sensu::Plugin::Metric::CLI::Graphite
     end
 
     request = [
-      'select count(*), waiting from pg_stat_activity',
-      "where datname = '#{config[:database]}' group by waiting"
+      'select datname, count(*), waiting from pg_stat_activity',
+      "group by datname, waiting"
     ]
 
-    metrics = {
+    metrics = Hash.new{|h, k| h[k] ={
       active: 0,
       waiting: 0,
       total: 0
-    }
+    }}
+
     con.exec(request.join(' ')) do |result|
       result.each do |row|
         if row['waiting'] == 't'
-          metrics[:waiting] = row['count']
+          metrics[row['datname']][:waiting] = row['count']
         elsif row['waiting'] == 'f'
-          metrics[:active] = row['count']
+          metrics[row['datname']][:active] = row['count']
         end
       end
     end
 
-    metrics[:total] = (metrics[:waiting].to_i + metrics[:active].to_i)
+    metrics.each do |datname,metric|
+      metric[:total] = (metric[:waiting].to_i + metric[:active].to_i)
+    end
 
-    metrics.each do |metric, value|
-      output "#{config[:scheme]}.connections.#{config[:database]}.#{metric}", value, timestamp
+    metrics.each do |datname, metric|
+      metric.each do |metric,value|
+        output "#{config[:scheme]}.connections.#{metric}", value, "#{timestamp} database=#{datname}"
+      end
     end
 
     ok
