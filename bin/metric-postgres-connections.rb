@@ -90,7 +90,6 @@ class PostgresStatsDBMetrics < Sensu::Plugin::Metric::CLI::Graphite
                            connect_timeout: config[:timeout])
     end
 
->>>>>>> 24f4144... Add connection_string param
     request = [
       'select count(*), waiting from pg_stat_activity',
       "where datname = '#{config[:database]}' group by waiting"
