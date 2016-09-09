@@ -117,7 +117,7 @@ class PostgresStatsDBMetrics < Sensu::Plugin::Metric::CLI::Graphite
 
     metrics.each do |datname, metric|
       metric.each do |metric,value|
-        output "#{config[:scheme]}.connections.#{metric}", value, "#{timestamp} database=#{datname}"
+        output "#{config[:scheme]}.connections.#{metric}", value, "#{timestamp} schema=#{datname}"
       end
     end
 

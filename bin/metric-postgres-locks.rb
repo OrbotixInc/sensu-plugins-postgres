@@ -105,12 +105,12 @@ class PostgresStatsDBMetrics < Sensu::Plugin::Metric::CLI::Graphite
     end
 
     total_locks_per_type.each do |lock_type, count|
-      output "#{config[:scheme]}.locks.#{lock_type}", count, "#{timestamp} database=total"
+      output "#{config[:scheme]}.locks", count, "#{timestamp} schema=total lock_type=#{lock_type}"
     end
 
     per_db_locks.each do |database,locks|
       locks.each do |lock_type, count|
-        output "#{config[:scheme]}.locks.#{lock_type}", count, "#{timestamp} database=#{database}"
+        output "#{config[:scheme]}.locks.#{lock_type}", count, "#{timestamp} schema=#{database} lock_type=#{lock_type}"
       end
     end
 
