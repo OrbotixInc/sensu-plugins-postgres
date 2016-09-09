@@ -80,7 +80,8 @@ class PostgresStatsDBMetrics < Sensu::Plugin::Metric::CLI::Graphite
   def run
     timestamp = Time.now.to_i
 
-    locks_per_type = Hash.new(0)
+    total_locks_per_type = Hash.new(0)
+    per_db_locks = Hash.new{|h, k| h[k] = Hash.new(0)}
 
     if config[:connection_string]
       con = PG::Connection.new(config[:connection_string])
@@ -92,21 +93,25 @@ class PostgresStatsDBMetrics < Sensu::Plugin::Metric::CLI::Graphite
                            connect_timeout: config[:timeout])
     end
 
-    request = [
-      'SELECT mode, count(mode) FROM pg_locks',
-      "where database = (select oid from pg_database where datname = '#{config[:database]}')",
-      'group by mode'
-    ]
+    request = "SELECT pgd.datname,pgl.mode,count(pgl.mode) FROM pg_locks pgl JOIN pg_database pgd ON pgd.oid = pgl.database group by pgd.datname, pgl.mode;"
 
-    con.exec(request.join(' ')) do |result|
+    con.exec(request) do |result|
       result.each do |row|
+        db_name = row['datname']
         lock_name = row['mode'].downcase.to_sym
-        locks_per_type[lock_name] += 1
+        total_locks_per_type[lock_name] += 1
+        per_db_locks[db_name][lock_name] += 1
       end
     end
 
-    locks_per_type.each do |lock_type, count|
-      output "#{config[:scheme]}.locks.#{config[:database]}.#{lock_type}", count, timestamp
+    total_locks_per_type.each do |lock_type, count|
+      output "#{config[:scheme]}.locks.#{lock_type}", count, "#{timestamp} database=total"
+    end
+
+    per_db_locks.each do |database,locks|
+      locks.each do |lock_type, count|
+        output "#{config[:scheme]}.locks.#{lock_type}", count, "#{timestamp} database=#{database}"
+      end
     end
 
     ok
