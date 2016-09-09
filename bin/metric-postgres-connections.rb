@@ -33,6 +33,11 @@ require 'pg'
 require 'socket'
 
 class PostgresStatsDBMetrics < Sensu::Plugin::Metric::CLI::Graphite
+  option :connection_string,
+         description: 'A postgres connection string to use, overrides any other parameters',
+         short: '-c CONNECTION_STRING',
+         long:  '--connection CONNECTION_STRING'
+
   option :user,
          description: 'Postgres User',
          short: '-u USER',
@@ -75,11 +80,17 @@ class PostgresStatsDBMetrics < Sensu::Plugin::Metric::CLI::Graphite
   def run
     timestamp = Time.now.to_i
 
-    con     = PG.connect(host: config[:hostname],
-                         dbname: config[:database],
-                         user: config[:user],
-                         password: config[:password],
-                         connect_timeout: config[:timeout])
+    if config[:connection_string]
+      con = PG::Connection.new(config[:connection_string])
+    else
+      con     = PG.connect(host: config[:hostname],
+                           dbname: config[:database],
+                           user: config[:user],
+                           password: config[:password],
+                           connect_timeout: config[:timeout])
+    end
+
+>>>>>>> 24f4144... Add connection_string param
     request = [
       'select count(*), waiting from pg_stat_activity',
       "where datname = '#{config[:database]}' group by waiting"

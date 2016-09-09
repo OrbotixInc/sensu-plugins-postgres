@@ -31,6 +31,11 @@ require 'sensu-plugin/check/cli'
 require 'pg'
 
 class CheckPostgres < Sensu::Plugin::Check::CLI
+  option :connection_string,
+         description: 'A postgres connection string to use, overrides any other parameters',
+         short: '-c CONNECTION_STRING',
+         long:  '--connection CONNECTION_STRING'
+
   option :user,
          description: 'Postgres User',
          short: '-u USER',
@@ -65,11 +70,17 @@ class CheckPostgres < Sensu::Plugin::Check::CLI
          default: nil
 
   def run
-    con = PG.connect(host: config[:hostname],
-                     dbname: config[:database],
-                     user: config[:user],
-                     password: config[:password],
-                     connect_timeout: config[:timeout])
+
+    if config[:connection_string]
+      con = PG::Connection.new(config[:connection_string])
+    else
+      con = PG.connect(host: config[:hostname],
+                       dbname: config[:database],
+                       user: config[:user],
+                       password: config[:password],
+                       connect_timeout: config[:timeout])
+    end
+
     res = con.exec('select version();')
     info = res.first
 

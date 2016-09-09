@@ -31,6 +31,11 @@ require 'sensu-plugin/metric/cli'
 require 'pg'
 
 class MetricsPostgresQuery < Sensu::Plugin::Metric::CLI::Graphite
+  option :connection_string,
+         description: 'A postgres connection string to use, overrides any other parameters',
+         short: '-c CONNECTION_STRING',
+         long:  '--connection CONNECTION_STRING'
+
   option :user,
          description: 'Postgres User',
          short: '-u USER',
@@ -86,11 +91,17 @@ class MetricsPostgresQuery < Sensu::Plugin::Metric::CLI::Graphite
 
   def run
     begin
-      con = PG.connect(host: config[:hostname],
-                       dbname: config[:database],
-                       user: config[:user],
-                       password: config[:password],
-                       connect_timeout: config[:timeout])
+
+      if config[:connection_string]
+        con = PG::Connection.new(config[:connection_string])
+      else
+        con = PG.connect(host: config[:hostname],
+                         dbname: config[:database],
+                         user: config[:user],
+                         password: config[:password],
+                         connect_timeout: config[:timeout])
+      end
+
       res = con.exec(config[:query].to_s)
     rescue PG::Error => e
       unknown "Unable to query PostgreSQL: #{e.message}"
