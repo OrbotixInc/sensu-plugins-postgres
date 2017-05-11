@@ -60,7 +60,7 @@ class PostgresStatsDBMetrics < Sensu::Plugin::Metric::CLI::Graphite
          long: '--port PORT',
          default: 5432
 
-  option :database,
+  option :db,
          description: 'Database name',
          short: '-d DB',
          long: '--db DB',
@@ -71,46 +71,38 @@ class PostgresStatsDBMetrics < Sensu::Plugin::Metric::CLI::Graphite
          long: '--scheme SCHEME',
          default: "#{Socket.gethostname}.postgresql"
 
-  option :timeout,
-         description: 'Connection timeout (seconds)',
-         short: '-T TIMEOUT',
-         long: '--timeout TIMEOUT',
-         default: nil
-
   def run
     timestamp = Time.now.to_i
 
-    total_locks_per_type = Hash.new(0)
-    per_db_locks = Hash.new{|h, k| h[k] = Hash.new(0)}
+    metrics = {}
+    metrics['_total'] = Hash.new(0)
 
     if config[:connection_string]
       con = PG::Connection.new(config[:connection_string])
     else
-      con     = PG.connect(host: config[:hostname],
-                           dbname: config[:database],
-                           user: config[:user],
-                           password: config[:password],
-                           connect_timeout: config[:timeout])
+      con = PG::Connection.new(config[:hostname], config[:port], nil, nil, config[:db], config[:user], config[:password])
     end
 
-    request = "SELECT pgd.datname,pgl.mode,count(pgl.mode) FROM pg_locks pgl JOIN pg_database pgd ON pgd.oid = pgl.database group by pgd.datname, pgl.mode;"
+    request = [
+      'SELECT pgd.datname, mode, count(mode) FROM pg_locks',
+      'join pg_database pgd on oid=database',
+      'group by pgd.datname, mode',
+    ]
 
-    con.exec(request) do |result|
+    con.exec(request.join(' ')) do |result|
       result.each do |row|
-        db_name = row['datname']
+        if !metrics.key? row['database']
+          metrics[row['datname']] = Hash.new(0)
+        end
         lock_name = row['mode'].downcase.to_sym
-        total_locks_per_type[lock_name] += 1
-        per_db_locks[db_name][lock_name] += 1
+        metrics[row['datname']][lock_name] += 1
+        metrics['_total'][lock_name] += 1
       end
     end
 
-    total_locks_per_type.each do |lock_type, count|
-      output "#{config[:scheme]}.locks", count, "#{timestamp} schema=total lock_type=#{lock_type}"
-    end
-
-    per_db_locks.each do |database,locks|
+    metrics.each do |schema, locks|
       locks.each do |lock_type, count|
-        output "#{config[:scheme]}.locks.#{lock_type}", count, "#{timestamp} schema=#{database} lock_type=#{lock_type}"
+        output "#{config[:scheme]}.locks.#{config[:db]}", count, "#{timestamp} schema=#{schema} database_name=#{config[:scheme]} lock_type=#{lock_type}"
       end
     end
 
